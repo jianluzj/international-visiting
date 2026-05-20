@@ -24,6 +24,24 @@ class Settings(BaseSettings):
         "https://podcasts.apple.com/us/podcast/the-investors-podcast-we-study-billionaires-the/id928933489?l=zh-Hans-CN"
     ]
     
+    # Speaker to Voice mapping (Role Separation)
+    # Default mapping: SPEAKER_A (usually host), SPEAKER_B (usually guest)
+    speaker_voice_map: dict[str, str] = {
+        "HOST": "zh-CN-YunxiNeural",
+        "GUEST": "zh-CN-XiaoxiaoNeural",
+        "UNKNOWN": "zh-CN-XiaoxiaoNeural"
+    }
+    
+    # Translation Glossary (Term -> Translation)
+    glossary: dict[str, str] = {
+        "Fiscal Dominance": "财政主导",
+        "Treasuries": "国债",
+        "Inflation": "通货膨胀",
+        "Bitcoin": "比特币",
+        "Lyn Alden": "琳·阿尔登",
+        "Stig Brodersen": "史蒂格·布罗德森"
+    }
+    
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

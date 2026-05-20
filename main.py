@@ -71,9 +71,10 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False):
 
     # 3. Translation
     if not state["steps"].get("translate", {}).get("done"):
-        logger.info("Step 3: Translating transcript...")
-        translator = Translator(settings.llm_api_key, settings.llm_base_url, settings.llm_model)
-        bilingual_data = translator.run_translation(transcription)
+        logger.info("Step 3: Translating transcript (concurrently with glossary)...")
+        translator = Translator(settings.llm_api_key, settings.llm_base_url, settings.llm_model, glossary=settings.glossary)
+        import asyncio
+        bilingual_data = asyncio.run(translator.run_translation(transcription))
         state["steps"]["translate"] = {"done": True, "data": bilingual_data}
         save_state(state)
     else:
@@ -83,21 +84,28 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False):
     # 4. Synthesis
     output_audio = os.path.join(settings.output_dir, "chinese_podcast.mp3")
     if not state["steps"].get("synthesize", {}).get("done"):
-        logger.info("Step 4: Synthesizing Chinese audio...")
+        logger.info("Step 4: Synthesizing Chinese audio (role-based)...")
         import asyncio
-        asyncio.run(run_synthesis(bilingual_data, output_audio, settings.tts_voice))
+        asyncio.run(run_synthesis(bilingual_data, output_audio, settings.speaker_voice_map))
         state["steps"]["synthesize"] = {"done": True, "output_path": output_audio}
         save_state(state)
     else:
         logger.info("Step 4: Skipping synthesis (already done).")
 
-    # 5. RSS Generation
-    logger.info("Step 5: Generating RSS feed...")
+    # 5. RSS & Web Data Generation
+    logger.info("Step 5: Generating RSS feed and web data...")
     rss_path = generate_rss(metadata, bilingual_data, output_audio, settings.base_url)
+    
+    # Export for web player
+    with open(os.path.join(settings.output_dir, "data.json"), "w", encoding="utf-8") as f:
+        json.dump(bilingual_data, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(settings.output_dir, "metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
     
     logger.info("="*40)
     logger.info("PIPELINE COMPLETE!")
     logger.info(f"RSS Feed: {settings.base_url}/podcast.xml")
+    logger.info(f"Web Player: {settings.base_url}/index.html")
     logger.info("="*40)
     
     # Cleanup state on success

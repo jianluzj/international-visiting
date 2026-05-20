@@ -25,22 +25,36 @@ def split_text(text: str, max_chars: int = 4000) -> List[str]:
         chunks.append(current_chunk.strip())
     return chunks
 
-async def run_synthesis(bilingual_data: List[Dict], output_path: str, voice: str = "zh-CN-XiaoxiaoNeural"):
-    full_chinese_text = "\n".join([item['translated'] for item in bilingual_data if "[TRANSLATION FAILED]" not in item['translated']])
-    
-    chunks = split_text(full_chinese_text)
-    combined_audio = AudioSegment.empty()
-    
-    print(f"Synthesizing Chinese audio in {len(chunks)} chunks...")
+from config import settings
+
+async def run_synthesis(bilingual_data: List[Dict], output_path: str, voice_map: Dict[str, str] = None):
+    if voice_map is None:
+        voice_map = settings.speaker_voice_map
+
+    print(f"Synthesizing Chinese audio for {len(bilingual_data)} segments concurrently...")
     
     with tempfile.TemporaryDirectory() as tmpdir:
-        for i, chunk in enumerate(chunks):
-            print(f"Synthesizing chunk {i+1}/{len(chunks)}...")
-            temp_mp3 = os.path.join(tmpdir, f"chunk_{i}.mp3")
-            await synthesize_chunk(chunk, temp_mp3, voice)
+        async def process_segment(i, item):
+            text = item['translated']
+            if "[TRANSLATION FAILED]" in text:
+                return None
             
-            segment = AudioSegment.from_mp3(temp_mp3)
-            combined_audio += segment
+            speaker = item.get('speaker', 'UNKNOWN')
+            voice = voice_map.get(speaker, voice_map.get('UNKNOWN', "zh-CN-XiaoxiaoNeural"))
+            
+            temp_mp3 = os.path.join(tmpdir, f"seg_{i}.mp3")
+            await synthesize_chunk(text, temp_mp3, voice)
+            return temp_mp3
+
+        tasks = [process_segment(i, item) for i, item in enumerate(bilingual_data)]
+        temp_files = await asyncio.gather(*tasks)
+        
+        print(f"Combining audio segments...")
+        combined_audio = AudioSegment.empty()
+        for temp_mp3 in temp_files:
+            if temp_mp3:
+                segment = AudioSegment.from_mp3(temp_mp3)
+                combined_audio += segment
             
         print(f"Exporting final audio to {output_path}...")
         combined_audio.export(output_path, format="mp3", bitrate="192k")
