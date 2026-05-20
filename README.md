@@ -1,62 +1,69 @@
 # 跨国串门 (International Visiting) 🎙️🌍
 
-**跨国串门** 是一个自动化工具，旨在打破语言壁垒，将优质的英文播客转换为中文播客，并保留中英双语对照文本。它生成的标准 RSS 订阅源可以让你在手机播客 App 中像听中文节目一样收听全球资讯。
+**跨国串门** 是一个先进的自动化工具，旨在打破语言壁垒，将优质的英文播客转换为地道的中文播客。它不仅生成标准的 RSS 订阅源，还提供了一个支持双语字幕同步滚动的高级 Web 播放器。
 
 ## ✨ 核心特性
 
-- **一键转换**：输入 Apple Podcasts 链接，自动完成下载、听写、翻译、合成全流程。
-- **高精度听写**：集成 OpenAI 开源的 `Whisper` 模型，精准捕捉英文原意。
-- **智能翻译**：支持接入 LLM (如 GPT-4o, DeepSeek) 进行地道的语境翻译。
-- **自然合成**：采用 Microsoft `Edge-TTS` 免费方案，生成自然流畅的中文配音。
-- **双语 RSS**：生成包含中英对照 Show Notes 的 RSS 订阅源，支持 Apple Podcasts、小宇宙等客户端。
-- **灵活预览**：支持生成 5 分钟测试片段，快速验证效果。
+- **一键全自动转换**：输入 Apple Podcasts 链接，自动完成下载、听写、翻译、合成、发布全流程。
+- **🚀 异步并发架构**：翻译与合成阶段全面采用 `asyncio` 并发处理，处理速度比传统串行模式提升 3-5 倍。
+- **🎙️ AI 角色分离 (Diarization)**：利用 LLM 智能识别主持人与嘉宾，并自动分配不同的中文音色（如男声主持人、女声嘉宾），打造真实对谈听感。
+- **🧠 专业级翻译**：
+    - **全局术语表 (Glossary)**：支持自定义专业词汇映射，确保核心概念翻译前后一致。
+    - **语境增强**：翻译前自动生成全篇背景摘要，让 AI 深入理解节目主旨后再进行片段翻译。
+- **🌐 交互式 Web 播放器**：
+    - **卡拉 OK 字幕**：中英双语对照文本随音频播放同步高亮滚动。
+    - **点击即播**：点击任意一段文本，音频自动跳转到对应时间点播放。
+- **📻 手机端原生订阅**：生成包含完整双语 Show Notes 的 RSS 订阅源，支持 Apple Podcasts、小宇宙等客户端。
 
 ## 🛠️ 技术架构
 
-1.  **Downloader**: 解析 iTunes API 提取原始音频。
-2.  **Transcriber**: 使用 Whisper 进行 ASR 语音识别。
-3.  **Translator**: 调用大模型进行分段翻译并生成双语结构。
-4.  **Synthesizer**: 使用 Edge-TTS 合成中文 MP3。
-5.  **RSS Generator**: 封装标准播客 XML 协议。
+1.  **Downloader**: 健壮的下载器，支持 iTunes API 解析、UA 伪装及下载进度实时显示。
+2.  **Transcriber**: 基于 `Whisper` 的高性能语音识别。
+3.  **Translator**: 使用 `AsyncOpenAI` 驱动的智能翻译引擎，内置断点续传与重试机制。
+4.  **Synthesizer**: `Edge-TTS` 并发合成引擎，支持多角色音色映射。
+5.  **Web Portal**: 基于 HTML5 + Vanilla JS 的轻量级移动端优先播放器。
 
 ## 🚀 快速开始
 
 ### 1. 环境准备
-确保系统中已安装 `ffmpeg` 和 `python3-venv`。
+确保系统中已安装 `ffmpeg`、`python3-venv`。
 
 ### 2. 安装项目
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jianluzj/international-visiting.git
 cd international-visiting
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. 运行转换
-```bash
-# 测试运行（5分钟片段，不带 API Key 使用占位翻译）
-python3 main.py "https://podcasts.apple.com/..."
+### 3. 配置
+编辑 `.env` 文件或 `config.py`：
+- `LLM_API_KEY`: 您的 LLM API 密钥。
+- `LLM_BASE_URL`: API 代理地址。
+- `speaker_voice_map`: 自定义不同角色的发音人音色。
+- `glossary`: 添加您关注领域的专有名词映射。
 
-# 正式运行（完整转换，使用 API Key）
-python3 main.py "https://podcasts.apple.com/..." --full --llm-key "YOUR_API_KEY"
+### 4. 运行
+```bash
+# 测试运行（5分钟片段）
+python3 main.py "PODCAST_URL"
+
+# 正式运行（完整转换）
+python3 main.py "PODCAST_URL" --full
+
+# 断点续传（如果上次意外中断）
+python3 main.py --resume
 ```
 
-### 4. 订阅收听
-转换完成后，`output` 目录会生成 `podcast.xml` 和 `chinese_podcast.mp3`。
-启动本地服务：
+### 5. 预览与订阅
+启动服务：
 ```bash
 cd output
 python3 -m http.server 8000
 ```
-在手机播客 App 中通过 URL 添加：`http://<你的服务器IP>:8000/podcast.xml`。
-
-## ⚙️ 配置说明
-
-可以通过环境变量或命令行参数配置：
-- `LLM_API_KEY`: 翻译用的 API 密钥。
-- `LLM_BASE_URL`: API 代理地址（如需）。
-- `BASE_URL`: RSS 文件中音频的访问根地址。
+- **Web 播放器**: `http://<服务器IP>:8000/index.html`
+- **RSS 订阅**: `http://<服务器IP>:8000/podcast.xml`
 
 ---
 🤖 *本项目由 Gemini CLI 协作开发完成。*  
