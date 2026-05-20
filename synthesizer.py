@@ -3,13 +3,49 @@ import edge_tts
 import json
 import os
 import sys
+import tempfile
 from pydub import AudioSegment
+from typing import List, Dict
 
-async def synthesize(text, output_path, voice="zh-CN-XiaoxiaoNeural"):
+async def synthesize_chunk(text: str, output_path: str, voice: str = "zh-CN-XiaoxiaoNeural"):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
 
-async def main():
+def split_text(text: str, max_chars: int = 4000) -> List[str]:
+    """Splits text into chunks for Edge-TTS."""
+    chunks = []
+    current_chunk = ""
+    for line in text.split('\n'):
+        if len(current_chunk) + len(line) + 1 < max_chars:
+            current_chunk += line + '\n'
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = line + '\n'
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    return chunks
+
+async def run_synthesis(bilingual_data: List[Dict], output_path: str, voice: str = "zh-CN-XiaoxiaoNeural"):
+    full_chinese_text = "\n".join([item['translated'] for item in bilingual_data if "[TRANSLATION FAILED]" not in item['translated']])
+    
+    chunks = split_text(full_chinese_text)
+    combined_audio = AudioSegment.empty()
+    
+    print(f"Synthesizing Chinese audio in {len(chunks)} chunks...")
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for i, chunk in enumerate(chunks):
+            print(f"Synthesizing chunk {i+1}/{len(chunks)}...")
+            temp_mp3 = os.path.join(tmpdir, f"chunk_{i}.mp3")
+            await synthesize_chunk(chunk, temp_mp3, voice)
+            
+            segment = AudioSegment.from_mp3(temp_mp3)
+            combined_audio += segment
+            
+        print(f"Exporting final audio to {output_path}...")
+        combined_audio.export(output_path, format="mp3", bitrate="192k")
+
+if __name__ == "__main__":
     input_path = "processed/bilingual_data.json"
     if not os.path.exists(input_path):
         print(f"Input file not found: {input_path}")
@@ -20,25 +56,13 @@ async def main():
         
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Combine all translated text
-    full_chinese_text = "\n".join([item['translated'] for item in data])
-    
-    temp_mp3 = os.path.join(output_dir, "temp_chinese.mp3")
-    print(f"Synthesizing Chinese audio...")
-    await synthesize(full_chinese_text, temp_mp3)
-    
-    # Final output path
     final_output = os.path.join(output_dir, "chinese_podcast.mp3")
     
-    # Use pydub to ensure it's a standard MP3 and maybe add some padding/metadata
-    audio = AudioSegment.from_mp3(temp_mp3)
-    audio.export(final_output, format="mp3", bitrate="192k")
+    voice = os.environ.get("TTS_VOICE", "zh-CN-XiaoxiaoNeural")
     
-    print(f"Chinese podcast saved to {final_output}")
-    # Cleanup temp
-    if os.path.exists(temp_mp3):
-        os.remove(temp_mp3)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(run_synthesis(data, final_output, voice))
+        print("Synthesis complete.")
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)

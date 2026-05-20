@@ -1,73 +1,131 @@
-import subprocess
-import sys
 import os
+import sys
+import json
+import logging
 import argparse
+from typing import Dict, Optional
 
-def run_step(step_name, command):
-    print(f"\n>>> Starting {step_name}...")
-    result = subprocess.run(command, shell=True)
-    if result.returncode != 0:
-        print(f"!!! Error in {step_name}. Exiting.")
-        sys.exit(result.returncode)
-    print(f"--- {step_name} completed successfully.")
+# Import refactored modules
+from config import settings
+from downloader import run_download
+from transcriber import run_transcription
+from translator import Translator
+from synthesizer import run_synthesis
+from rss_generator import generate_rss
 
-def main():
-    parser = argparse.ArgumentParser(description="International Visiting: English to Chinese Podcast Converter")
-    parser.add_argument("url", help="Apple Podcasts URL")
-    parser.add_argument("--llm-key", help="LLM API Key (optional if set in env)")
-    parser.add_argument("--base-url", default="http://localhost:8000", help="Base URL for hosting (default: http://localhost:8000)")
-    parser.add_argument("--full", action="store_true", help="Process the full audio (default is test snippet)")
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("pipeline.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("Pipeline")
+
+STATE_FILE = "state.json"
+
+def load_state() -> Dict:
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    return {"steps": {}}
+
+def save_state(state: Dict):
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f, indent=2)
+
+def run_pipeline(url: str, resume: bool = False, full: bool = False):
+    state = load_state() if resume else {"steps": {}, "url": url}
+    
+    # 1. Download
+    if not state["steps"].get("download", {}).get("done"):
+        logger.info("Step 1: Downloading podcast...")
+        metadata = run_download(url, settings.download_dir)
+        state["steps"]["download"] = {"done": True, "metadata": metadata}
+        save_state(state)
+    else:
+        logger.info("Step 1: Skipping download (already done).")
+        metadata = state["steps"]["download"]["metadata"]
+
+    audio_path = metadata["local_audio_path"]
+    
+    # Optional snippet for testing
+    if not full:
+        snippet_path = os.path.join(settings.download_dir, "test_snippet.mp3")
+        if not os.path.exists(snippet_path):
+            logger.info("Creating 5-minute snippet for testing...")
+            os.system(f"ffmpeg -y -ss 0 -t 300 -i \"{audio_path}\" -acodec copy \"{snippet_path}\"")
+        audio_path = snippet_path
+
+    # 2. Transcription
+    if not state["steps"].get("transcribe", {}).get("done"):
+        logger.info("Step 2: Transcribing audio (this may take a while)...")
+        transcription = run_transcription(audio_path, settings.whisper_model)
+        state["steps"]["transcribe"] = {"done": True, "data": transcription}
+        save_state(state)
+    else:
+        logger.info("Step 2: Skipping transcription (already done).")
+        transcription = state["steps"]["transcribe"]["data"]
+
+    # 3. Translation
+    if not state["steps"].get("translate", {}).get("done"):
+        logger.info("Step 3: Translating transcript...")
+        translator = Translator(settings.llm_api_key, settings.llm_base_url, settings.llm_model)
+        bilingual_data = translator.run_translation(transcription)
+        state["steps"]["translate"] = {"done": True, "data": bilingual_data}
+        save_state(state)
+    else:
+        logger.info("Step 3: Skipping translation (already done).")
+        bilingual_data = state["steps"]["translate"]["data"]
+
+    # 4. Synthesis
+    output_audio = os.path.join(settings.output_dir, "chinese_podcast.mp3")
+    if not state["steps"].get("synthesize", {}).get("done"):
+        logger.info("Step 4: Synthesizing Chinese audio...")
+        import asyncio
+        asyncio.run(run_synthesis(bilingual_data, output_audio, settings.tts_voice))
+        state["steps"]["synthesize"] = {"done": True, "output_path": output_audio}
+        save_state(state)
+    else:
+        logger.info("Step 4: Skipping synthesis (already done).")
+
+    # 5. RSS Generation
+    logger.info("Step 5: Generating RSS feed...")
+    rss_path = generate_rss(metadata, bilingual_data, output_audio, settings.base_url)
+    
+    logger.info("="*40)
+    logger.info("PIPELINE COMPLETE!")
+    logger.info(f"RSS Feed: {settings.base_url}/podcast.xml")
+    logger.info("="*40)
+    
+    # Cleanup state on success
+    if os.path.exists(STATE_FILE):
+        os.remove(STATE_FILE)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="International Visiting Podcast Pipeline")
+    parser.add_argument("url", nargs="?", help="Apple Podcasts URL")
+    parser.add_argument("--resume", action="store_true", help="Resume from last state")
+    parser.add_argument("--full", action="store_true", help="Process full audio")
     
     args = parser.parse_args()
     
-    python_bin = "./venv/bin/python3"
-    
-    # 1. Download
-    run_step("Download", f"{python_bin} downloader.py \"{args.url}\"")
-    
-    audio_file = "downloads/original_audio.mp3"
-    if not args.full:
-        print(">>> Creating 5-minute snippet for testing...")
-        snippet_file = "downloads/test_snippet.mp3"
-        subprocess.run(f"ffmpeg -y -ss 0 -t 300 -i {audio_file} -acodec copy {snippet_file}", shell=True)
-        audio_file = snippet_file
-
-    # 2. Transcribe
-    run_step("Transcription", f"{python_bin} transcriber.py {audio_file}")
-    
-    # 3. Translate
-    env_vars = os.environ.copy()
-    if args.llm_key:
-        env_vars["LLM_API_KEY"] = args.llm_key
-    
-    # We pass the env to the subprocess for the key
-    print("\n>>> Starting Translation...")
-    # Using subprocess.run with env directly for translation step
-    res = subprocess.run(f"{python_bin} translator.py", shell=True, env=env_vars)
-    if res.returncode != 0:
-        print("!!! Error in Translation. Exiting.")
-        sys.exit(res.returncode)
-    print("--- Translation completed successfully.")
-
-    # 4. Synthesize
-    run_step("Synthesis", f"{python_bin} synthesizer.py")
-    
-    # 5. RSS Generation
-    env_vars["BASE_URL"] = args.base_url
-    print("\n>>> Starting RSS Generation...")
-    res = subprocess.run(f"{python_bin} rss_generator.py", shell=True, env=env_vars)
-    if res.returncode != 0:
-        print("!!! Error in RSS Generation. Exiting.")
-        sys.exit(res.returncode)
-    print("--- RSS Generation completed successfully.")
-
-    print("\n" + "="*40)
-    print("PROJECT COMPLETE!")
-    print(f"Output files are in the 'output' directory.")
-    print(f"1. Audio: output/chinese_podcast.mp3")
-    print(f"2. RSS: output/podcast.xml")
-    print(f"To host locally, run: cd output && python3 -m http.server 8000")
-    print("="*40)
-
-if __name__ == "__main__":
-    main()
+    if not args.url and not args.resume:
+        parser.print_help()
+        sys.exit(1)
+        
+    url = args.url
+    if args.resume:
+        state = load_state()
+        url = state.get("url")
+        if not url:
+            logger.error("No state found to resume.")
+            sys.exit(1)
+            
+    try:
+        run_pipeline(url, args.resume, args.full)
+    except Exception as e:
+        logger.exception(f"Pipeline failed: {e}")
+        sys.exit(1)

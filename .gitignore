@@ -4,4 +4,6 @@ processed/
 output/
 __pycache__/
 *.pyc
+*.log
+state.json
 .env
