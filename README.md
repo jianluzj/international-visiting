@@ -23,47 +23,56 @@
 4.  **Synthesizer**: `Edge-TTS` 并发合成引擎，支持多角色音色映射。
 5.  **Web Portal**: 基于 HTML5 + Vanilla JS 的轻量级移动端优先播放器。
 
-## 🚀 快速开始
+## 📖 使用指南 (Usage Guide)
 
-### 1. 环境准备
-确保系统中已安装 `ffmpeg`、`python3-venv`。
-
-### 2. 安装项目
+### 1. 配置 API 密钥 (必选)
+在项目根目录创建 `.env` 文件，配置您的大模型 API 密钥以获得真实翻译效果：
 ```bash
-git clone https://github.com/jianluzj/international-visiting.git
-cd international-visiting
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+LLM_API_KEY=您的_API_KEY
+LLM_BASE_URL=https://api.openai.com/v1 # 或您的代理地址
 ```
 
-### 3. 配置
-编辑 `.env` 文件或 `config.py`：
-- `LLM_API_KEY`: 您的 LLM API 密钥。
-- `LLM_BASE_URL`: API 代理地址。
-- `speaker_voice_map`: 自定义不同角色的发音人音色。
-- `glossary`: 添加您关注领域的专有名词映射。
+### 2. 转换播客
 
-### 4. 运行
+#### **A. 手动转换 (单次)**
+输入一个 Apple Podcasts 链接即可开始：
 ```bash
-# 测试运行（5分钟片段）
-python3 main.py "PODCAST_URL"
+# 测试模式：仅转换前 5 分钟（建议先用此模式检查音色和翻译）
+./venv/bin/python3 main.py "https://podcasts.apple.com/..."
 
-# 正式运行（完整转换）
-python3 main.py "PODCAST_URL" --full
+# 全量模式：转换整集播客
+./venv/bin/python3 main.py "https://podcasts.apple.com/..." --full
 
-# 断点续传（如果上次意外中断）
-python3 main.py --resume
+# 断点续传：如果任务中断，运行此命令自动从失败处继续
+./venv/bin/python3 main.py --resume
 ```
 
-### 5. 预览与订阅
-启动服务：
+#### **B. 自动监控 (长期运行)**
+1. 在 `config.py` 的 `monitored_urls` 中添加您关注的播客链接。
+2. 运行监控脚本：
+```bash
+./venv/bin/python3 monitor.py
+```
+*建议配合 `crontab -e` 设置定时任务：`0 * * * * cd /path/to/project && ./venv/bin/python3 monitor.py`*
+
+### 3. 收听与体验成果
+
+#### **第一步：启动展示服务**
 ```bash
 cd output
 python3 -m http.server 8000
 ```
-- **Web 播放器**: `http://<服务器IP>:8000/index.html`
-- **RSS 订阅**: `http://<服务器IP>:8000/podcast.xml`
+
+#### **第二步：访问方式**
+- **Web 交互播放器**：浏览器打开 `http://<服务器IP>:8000/index.html`。
+    - *特性：双语字幕随动高亮，点击文字跳转播放。*
+- **播客 App 订阅**：在 Apple Podcasts 或小宇宙中选择“通过 URL 添加”，输入 `http://<服务器IP>:8000/podcast.xml`。
+    - *特性：标准 RSS 体验，支持后台播放，Show Notes 查看双语对照。*
+
+## ⚙️ 进阶配置
+在 `config.py` 中您可以深度自定义：
+- **声音更换**：修改 `speaker_voice_map` 映射不同角色的 Edge-TTS 音色。
+- **术语优化**：在 `glossary` 中添加特定领域的专有名词对照表。
 
 ---
 🤖 *本项目由 Gemini CLI 协作开发完成。*  
