@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 class Translator:
-    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", model: str = "gpt-4o", max_concurrency: int = 5, glossary: Dict[str, str] = None):
+    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", model: str = "gpt-4o", max_concurrency: int = 1, glossary: Dict[str, str] = None):
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
@@ -43,7 +43,7 @@ class Translator:
         except Exception as e:
             print(f"Error generating context: {e}")
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=30))
     async def translate_text(self, text: str) -> str:
         if not self.client:
             return "[MISSING API KEY] " + text

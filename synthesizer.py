@@ -7,47 +7,47 @@ import tempfile
 from pydub import AudioSegment
 from typing import List, Dict
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+
 async def synthesize_chunk(text: str, output_path: str, voice: str = "zh-CN-XiaoxiaoNeural"):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
 
-def split_text(text: str, max_chars: int = 4000) -> List[str]:
-    """Splits text into chunks for Edge-TTS."""
-    chunks = []
-    current_chunk = ""
-    for line in text.split('\n'):
-        if len(current_chunk) + len(line) + 1 < max_chars:
-            current_chunk += line + '\n'
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = line + '\n'
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-    return chunks
-
-from config import settings
-
-async def run_synthesis(bilingual_data: List[Dict], output_path: str, voice_map: Dict[str, str] = None):
+async def run_synthesis(bilingual_data: List[Dict], output_path: str, voice_map: Dict[str, str] = None, max_concurrency: int = 3):
     if voice_map is None:
         voice_map = settings.speaker_voice_map
+    
+    semaphore = asyncio.Semaphore(max_concurrency)
 
-    print(f"Synthesizing Chinese audio for {len(bilingual_data)} segments concurrently...")
+    print(f"Synthesizing Chinese audio for {len(bilingual_data)} segments with concurrency {max_concurrency}...")
     
     with tempfile.TemporaryDirectory() as tmpdir:
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
         async def process_segment(i, item):
             text = item['translated']
-            if "[TRANSLATION FAILED]" in text:
+            if "[TRANSLATION FAILED]" in text or "[MISSING API KEY]" in text:
                 return None
             
+            # Clean text - Edge-TTS sometimes fails on weird symbols
+            import re
+            text = re.sub(r'[^\w\s\u4e00-\u9fff，。！？、：；“”‘’（）]', '', text)
+            if not text.strip():
+                return None
+
             speaker = item.get('speaker', 'UNKNOWN')
             voice = voice_map.get(speaker, voice_map.get('UNKNOWN', "zh-CN-XiaoxiaoNeural"))
             
             temp_mp3 = os.path.join(tmpdir, f"seg_{i}.mp3")
-            await synthesize_chunk(text, temp_mp3, voice)
-            return temp_mp3
+            async with semaphore:
+                try:
+                    await synthesize_chunk(text, temp_mp3, voice)
+                    return temp_mp3
+                except Exception as e:
+                    print(f"TTS error on segment {i}: {e}")
+                    raise e
 
         tasks = [process_segment(i, item) for i, item in enumerate(bilingual_data)]
-        temp_files = await asyncio.gather(*tasks)
+        temp_files = await asyncio.gather(*tasks, return_exceptions=False)
         
         print(f"Combining audio segments...")
         combined_audio = AudioSegment.empty()
