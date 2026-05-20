@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     output_dir: str = "output"
     
     # App Config
+    author_name: str = "jianluzj"
+    author_email: str = "jianluzj@gmail.com"
     monitored_urls: list[str] = [
         "https://podcasts.apple.com/us/podcast/the-investors-podcast-we-study-billionaires-the/id928933489?l=zh-Hans-CN"
     ]

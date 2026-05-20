@@ -8,12 +8,14 @@ from email.utils import format_datetime
 from pydub import AudioSegment
 from typing import Dict, List
 
+from config import settings
+
 def generate_rss(metadata: Dict, bilingual_data: List[Dict], audio_path: str, base_url: str) -> str:
     fg = FeedGenerator()
     fg.load_extension('podcast')
     
     fg.title(f"[中文翻译] {metadata['podcast_title']}")
-    fg.author({'name': 'jianluzj', 'email': 'jianluzj@gmail.com'})
+    fg.author({'name': settings.author_name, 'email': settings.author_email})
     fg.link(href=base_url, rel='alternate')
     fg.logo(metadata.get('image_url', ''))
     fg.subtitle('英文播客自动中文化项目')
