@@ -43,18 +43,29 @@ LLM_MODEL=deepseek-v4-flash # 或其他支持模型
 BASE_URL=http://your-domain.com:8000 # 您的服务器访问地址
 ```
 
-### 4. 启动 Web 服务 (全功能模式)
-运行一键启动脚本：
+### 4. 启动服务 (两种方式)
+
+#### **方式 A：Docker 一键部署 (推荐)**
+如果您安装了 Docker 和 Docker Compose，可以直接一键启动全套服务：
+```bash
+docker-compose up -d --build
+```
+*   **访问地址**：`http://您的服务器IP:8080` (API 和 Web 门户合二为一)
+*   **优点**：无需手动安装 FFmpeg、Redis 等，环境高度隔离。
+
+#### **方式 B：本地脚本启动**
 ```bash
 chmod +x start_web_app.sh
 ./start_web_app.sh
 ```
-*该脚本将同时启动 Redis、FastAPI 后端、Celery Worker 和静态网页服务。*
+*   **访问地址**：`http://您的服务器IP:8000` (Web) 和 `http://您的服务器IP:8080` (API)
 
 ## 📖 使用指南
 
 ### 1. 访问网页门户
-在浏览器打开 `http://您的服务器IP:8000`。
+在浏览器打开：
+*   **Docker 模式**: `http://您的服务器IP:8080`
+*   **本地脚本模式**: `http://您的服务器IP:8000`
 *   **添加播客**：在页面顶部输入链接，点击“开始转换”，观察进度条。
 *   **浏览列表**：在首页查看所有已处理完成的历史播客。
 *   **交互播放**：点击单集进入播放页，享受双语字幕同步。

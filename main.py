@@ -88,12 +88,15 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False, job_id: str
         logger.info("Step 3: Translating transcript (concurrently with glossary)...")
         translator = Translator(settings.llm_api_key, settings.llm_base_url, settings.llm_model, glossary=settings.glossary)
         import asyncio
-        bilingual_data = asyncio.run(translator.run_translation(transcription))
-        state["steps"]["translate"] = {"done": True, "data": bilingual_data}
+        translation_result = asyncio.run(translator.run_translation(transcription))
+        state["steps"]["translate"] = {"done": True, "data": translation_result}
         save_state(state, job_id)
     else:
         logger.info("Step 3: Skipping translation (already done).")
-        bilingual_data = state["steps"]["translate"]["data"]
+        translation_result = state["steps"]["translate"]["data"]
+    
+    bilingual_data = translation_result["segments"]
+    insights = translation_result.get("insights", {"summary": [], "quotes": []})
 
     # 4. Synthesis
     report_progress(job_id, "RUNNING", 80, "Synthesizing Chinese audio with multiple voices...")
@@ -121,7 +124,8 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False, job_id: str
     with open(episode_data_path, "w", encoding="utf-8") as f:
         json.dump({
             "metadata": metadata,
-            "segments": bilingual_data
+            "segments": bilingual_data,
+            "insights": insights
         }, f, ensure_ascii=False, indent=2)
     
     # Also update processed_episodes DB so the frontend immediately shows it

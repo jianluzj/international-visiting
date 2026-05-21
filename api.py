@@ -8,9 +8,11 @@ import uuid
 import time
 from config import settings
 from tasks import process_podcast_task
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="International Visiting API")
 
+# Allow CORS for Web UI
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -69,9 +71,9 @@ async def list_podcasts():
     sorted_episodes = sorted(db.values(), key=lambda x: x.get('pub_date', ''), reverse=True)
     return sorted_episodes
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to International Visiting API. Visit /docs for API documentation."}
+# Mount static files for Web Player and Data (MUST BE LAST)
+os.makedirs(settings.output_dir, exist_ok=True)
+app.mount("/", StaticFiles(directory=settings.output_dir, html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn

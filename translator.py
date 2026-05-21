@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import sys
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -72,14 +72,51 @@ class Translator:
             )
             return response.choices[0].message.content.strip()
 
-    async def run_translation(self, transcription_data: Dict, chunk_size: int = 15) -> List[Dict]:
+    async def generate_insights(self, full_text: str) -> Dict[str, Any]:
+        """Generates a detailed summary and extracts golden quotes."""
+        if not self.client:
+            return {"summary": [], "quotes": []}
+
+        print("Generating deep insights and golden quotes...")
+        prompt = (
+            "Based on the following podcast transcript, provide two things in JSON format:\n"
+            "1. 'summary': A list of 5-8 bullet points covering the core arguments and insights.\n"
+            "2. 'quotes': A list of 5-8 most impactful 'Golden Quotes'. For each quote, include:\n"
+            "   - 'speaker': Identify the speaker (HOST or GUEST).\n"
+            "   - 'original': The original English quote.\n"
+            "   - 'translated': A fluent Chinese translation.\n"
+            "   - 'context': A one-sentence explanation of why this is important.\n\n"
+            "Return ONLY raw JSON."
+        )
+
+        try:
+            # Use up to 4000 words for deep analysis
+            snippet = " ".join(full_text.split()[:4000])
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a professional content analyst."},
+                    {"role": "user", "content": f"{prompt}\n\nTranscript:\n{snippet}"}
+                ],
+                temperature=0.3,
+                response_format={ "type": "json_object" }
+            )
+            insights = json.loads(response.choices[0].message.content.strip())
+            return insights
+        except Exception as e:
+            print(f"Error generating insights: {e}")
+            return {"summary": ["无法生成摘要"], "quotes": []}
+
+    async def run_translation(self, transcription_data: Dict, chunk_size: int = 15) -> Dict[str, Any]:
         segments = transcription_data.get('segments', [])
         full_text = transcription_data.get('text', '')
-        
-        # Phase 1: Pre-process global context
+
+        # Phase 1: Pre-process global context and Phase 1.5: Generate Insights
         await self.generate_global_context(full_text)
-        
+        insights = await self.generate_insights(full_text)
+
         # Phase 2: Concurrent translation
+        translated_segments = []
         chunks = []
         for i in range(0, len(segments), chunk_size):
             chunk = segments[i:i + chunk_size]
@@ -132,7 +169,10 @@ class Translator:
         for r in results:
             del r['idx']
             
-        return results
+        return {
+            "segments": results,
+            "insights": insights
+        }
 
 if __name__ == "__main__":
     # Internal test/CLI usage
@@ -150,14 +190,14 @@ if __name__ == "__main__":
             data = json.load(f)
             
         translator = Translator(api_key, base_url, model)
-        results = await translator.run_translation(data)
+        results_obj = await translator.run_translation(data)
         
         output_dir = "processed"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "bilingual_data.json")
         
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
+            json.dump(results_obj, f, ensure_ascii=False, indent=2)
         
         print(f"Bilingual data saved to {output_path}")
 
