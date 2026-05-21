@@ -82,9 +82,15 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False):
         bilingual_data = state["steps"]["translate"]["data"]
 
     # 4. Synthesis
-    output_audio = os.path.join(settings.output_dir, "chinese_podcast.mp3")
+    episodes_dir = os.path.join(settings.output_dir, "episodes")
+    os.makedirs(episodes_dir, exist_ok=True)
+    
+    # Use GUID for unique filename (sanitized)
+    safe_guid = "".join([c for c in metadata["guid"] if c.isalnum()])
+    output_audio = os.path.join(episodes_dir, f"{safe_guid}.mp3")
+    
     if not state["steps"].get("synthesize", {}).get("done"):
-        logger.info("Step 4: Synthesizing Chinese audio (role-based)...")
+        logger.info(f"Step 4: Synthesizing Chinese audio (role-based) -> {output_audio}")
         import asyncio
         asyncio.run(run_synthesis(bilingual_data, output_audio, settings.speaker_voice_map))
         state["steps"]["synthesize"] = {"done": True, "output_path": output_audio}
@@ -96,7 +102,15 @@ def run_pipeline(url: str, resume: bool = False, full: bool = False):
     logger.info("Step 5: Generating RSS feed and web data...")
     rss_path = generate_rss(metadata, bilingual_data, output_audio, settings.base_url)
     
-    # Export for web player
+    # Export for web player (individual episode data)
+    episode_data_path = os.path.join(episodes_dir, f"{safe_guid}.json")
+    with open(episode_data_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "metadata": metadata,
+            "segments": bilingual_data
+        }, f, ensure_ascii=False, indent=2)
+    
+    # Legacy support for the single index.html if needed
     with open(os.path.join(settings.output_dir, "data.json"), "w", encoding="utf-8") as f:
         json.dump(bilingual_data, f, ensure_ascii=False, indent=2)
     with open(os.path.join(settings.output_dir, "metadata.json"), "w", encoding="utf-8") as f:

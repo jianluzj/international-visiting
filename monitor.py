@@ -52,9 +52,16 @@ def check_for_updates():
                 try:
                     run_pipeline(apple_url, resume=False, full=True)
                     
+                    # Store richer metadata for multi-episode support
                     db[key] = {
-                        "podcast": podcast_title,
-                        "episode": episode_title,
+                        "podcast_title": info['podcast_title'],
+                        "episode_title": info['episode_title'],
+                        "episode_description": info['episode_description'],
+                        "guid": info['guid'],
+                        "pub_date": info['pub_date'],
+                        "image_url": info.get('image_url', ''),
+                        "audio_filename": f"{''.join([c for c in info['guid'] if c.isalnum()])}.mp3",
+                        "data_filename": f"{''.join([c for c in info['guid'] if c.isalnum()])}.json",
                         "processed_at": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
                     updated = True
