@@ -22,42 +22,42 @@
 
 ## 🚀 快速开始
 
-### 1. 环境准备
-确保系统中已安装 `ffmpeg`、`python3-venv` 以及 `redis-server`。
-
-### 2. 安装项目
-```bash
-git clone https://github.com/jianluzj/international-visiting.git
-cd international-visiting
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 3. 配置
-创建 `.env` 文件：
+### 1. 准备工作
+- 确保您的服务器已安装 **Docker** 和 **Docker Compose**。
+- 创建 `.env` 文件并配置您的 API 密钥：
 ```bash
 LLM_API_KEY=您的_API_KEY
 LLM_BASE_URL=https://api.openai.com/v1 # 或 SenseNova 等代理地址
-LLM_MODEL=deepseek-v4-flash # 或其他支持模型
-BASE_URL=http://your-domain.com:8000 # 您的服务器访问地址
+LLM_MODEL=deepseek-v4-flash
+BASE_URL=http://your-domain.com:8080 # Docker 模式下默认为 8080 端口
 ```
 
-### 4. 启动服务 (两种方式)
-
-#### **方式 A：Docker 一键部署 (推荐)**
-如果您安装了 Docker 和 Docker Compose，可以直接一键启动全套服务：
+### 2. Docker 一键部署 (推荐)
+这是最简单、最稳健的启动方式，自动集成了所有依赖环境：
 ```bash
+git clone https://github.com/jianluzj/international-visiting.git
+cd international-visiting
 docker-compose up -d --build
 ```
-*   **访问地址**：`http://您的服务器IP:8080` (API 和 Web 门户合二为一)
-*   **优点**：无需手动安装 FFmpeg、Redis 等，环境高度隔离。
+*   **访问地址**：`http://您的服务器IP:8080`
+*   **优点**：无需手动安装 FFmpeg、Redis 等，环境高度隔离，支持自动重启。
 
-#### **方式 B：本地脚本启动**
-```bash
-chmod +x start_web_app.sh
-./start_web_app.sh
-```
+---
+
+### 3. 备选方案：本地脚本启动
+如果您不使用 Docker，可以手动安装依赖并启动：
+1. **安装环境**：安装 `ffmpeg`、`redis-server`、`python3-venv`。
+2. **初始化**：
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+3. **启动服务**：
+   ```bash
+   chmod +x start_web_app.sh
+   ./start_web_app.sh
+   ```
 *   **访问地址**：`http://您的服务器IP:8000` (Web) 和 `http://您的服务器IP:8080` (API)
 
 ## 📖 使用指南
