@@ -86,6 +86,12 @@ chmod +x start_web_app.sh
 - **声音映射**：修改 `speaker_voice_map` 为 HOST 和 GUEST 分配不同音色。
 - **术语优化**：在 `glossary` 中添加特定领域的专有名词对照表。
 
+## 🔮 未来优化计划 (Future Roadmap)
+- [ ] **听感极致化：原音复刻 (Voice Cloning)**: 引入先进 TTS，提取原片声音样本进行音色克隆，实现“原音说中文”的震撼体验。
+- [ ] **结构化阅读：智能章节 (Smart Chapters)**: 利用 LLM 自动识别话题切换点，生成带时间戳的章节导航。
+- [ ] **渠道扩展：YouTube 支持**: 支持直接粘贴 YouTube 视频链接进行转换。
+- [ ] **交互式校对：Web 版编辑器**: 在翻译和合成之间增加一个人工校对环节，确保“出版级”质量。
+
 ---
 🤖 *本项目由 Gemini CLI 协作开发完成。*  
 Maintainer: [jianluzj](mailto:jianluzj@gmail.com)
